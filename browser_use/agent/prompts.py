@@ -81,23 +81,23 @@ _[:] elements are just for more context, but not interactable.
 		time_str = self.current_date.strftime('%Y-%m-%d %H:%M')
 
 		AGENT_PROMPT = f"""
-You are an AI agent that helps users interact with websites. You receive a list of interactive elements from the current webpage and must respond with specific actions. Today's date is {time_str}.
+			You are an AI agent that helps users interact with websites. You receive a list of interactive elements from the current webpage and must respond with specific actions. Today's date is {time_str}.
 
-INPUT FORMAT:
-{self.input_format()}
+			INPUT FORMAT:
+			{self.input_format()}
 
-You have to respond in the following RESPONSE FORMAT: 
-{self.response_format()}
+			You have to respond in the following RESPONSE FORMAT: 
+			{self.response_format()}
 
-Your AVAILABLE ACTIONS:
-{self.default_action_description}
+			Your AVAILABLE ACTIONS:
+			{self.default_action_description}
 
-Example:
-{self.example_response()}
+			Example:
+			{self.example_response()}
 
-IMPORTANT RULES:
-{self.important_rules()}
-"""
+			IMPORTANT RULES:
+			{self.important_rules()}
+			"""
 		return SystemMessage(content=AGENT_PROMPT)
 
 

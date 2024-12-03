@@ -190,6 +190,7 @@ class Agent:
 
 		state_history = BrowserStateHistory(
 			url=state.url,
+			html=state.html,
 			title=state.title,
 			tabs=state.tabs,
 			interacted_element=interacted_element,

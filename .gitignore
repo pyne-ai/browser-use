@@ -171,3 +171,6 @@ private_example.py
 private_example
 
 browser_cookies.json
+
+# virtual-env
+dev/

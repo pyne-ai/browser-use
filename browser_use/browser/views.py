@@ -19,6 +19,7 @@ class TabInfo(BaseModel):
 @dataclass
 class BrowserState(DOMState):
 	url: str
+	html: str
 	title: str
 	tabs: list[TabInfo]
 	screenshot: Optional[str] = None
@@ -27,6 +28,7 @@ class BrowserState(DOMState):
 @dataclass
 class BrowserStateHistory:
 	url: str
+	html: str
 	title: str
 	tabs: list[TabInfo]
 	interacted_element: Optional[DOMHistoryElement] = None
@@ -41,6 +43,7 @@ class BrowserStateHistory:
 		)
 		data['url'] = self.url
 		data['title'] = self.title
+		data['html'] = self.html
 		return data
 
 

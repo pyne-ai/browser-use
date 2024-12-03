@@ -10,7 +10,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from typing import TypedDict
-
+import htmlrag
 from playwright.async_api import Browser as PlaywrightBrowser
 from playwright.async_api import (
 	BrowserContext,
@@ -114,6 +114,7 @@ class Browser:
 			),
 			selector_map={},
 			url=page.url,
+			html=await page.content(),
 			title=await page.title(),
 			screenshot=None,
 			tabs=[],
@@ -513,6 +514,7 @@ class Browser:
 		"""Update and return state."""
 		await self.remove_highlights()
 		page = await self.get_current_page()
+		page_html =  await self.get_page_html()
 		dom_service = DomService(page)
 		content = await dom_service.get_clickable_elements()  # Assuming this is async
 
@@ -520,11 +522,15 @@ class Browser:
 		if use_vision:
 			screenshot_b64 = await self.take_screenshot()
 
+		cleaned_html = htmlrag.clean_html(page_html)
+  
+  
 		self.current_state = BrowserState(
 			element_tree=content.element_tree,
 			selector_map=content.selector_map,
 			url=page.url,
 			title=await page.title(),
+			html=page_html,
 			tabs=await self.get_tabs_info(),
 			screenshot=screenshot_b64,
 		)

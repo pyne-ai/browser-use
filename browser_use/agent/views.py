@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import traceback
 from pathlib import Path
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, List, Optional, Type
 
 from openai import RateLimitError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
@@ -27,6 +27,19 @@ class ActionResult(BaseModel):
 	include_in_memory: bool = False  # whether to include in past messages as context or not
 
 
+class Thought(BaseModel):
+	"""Thoughts of the agent"""
+
+	memory: str
+	next_goal: str
+ 
+class SuccessfullClick(BaseModel):
+	"""Result of a successful click action"""
+
+	xpath: str
+	text: str
+	thought: Thought
+ 
 class AgentBrain(BaseModel):
 	"""Current state of the agent"""
 
@@ -220,7 +233,20 @@ class AgentHistoryList(BaseModel):
 					result.append(o)
 		return result
 
+	def successful_actions(self) -> list[SuccessfullClick]:
+		"""Get all successful action xPaths from history"""
+		successful_xpaths: List[SuccessfullClick] = []
+		for h in self.history:
+			if h.model_output and h.state.interacted_element:
+				if h.model_output.current_state.valuation_previous_goal == "Success":
+					thought= Thought(memory=h.model_output.current_state.memory, next_goal=h.model_output.current_state.next_goal)
+					click = SuccessfullClick(xpath=h.state.interacted_element.xpath, text=h.model_output.current_state.next_goal, thought=thought)
+					successful_xpaths.append(click)
+		return successful_xpaths
 
+
+ 
+ 
 class AgentError:
 	"""Container for agent error handling"""
 
