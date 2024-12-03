@@ -131,6 +131,7 @@ env.bak/
 venv.bak/
 test_env/
 
+
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -174,3 +175,5 @@ browser_cookies.json
 
 # virtual-env
 dev/
+cookies.json
+AgentHistory.json
