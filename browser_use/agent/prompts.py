@@ -23,7 +23,7 @@ class SystemPrompt:
 {{
 	"current_state": {{
 		"valuation_previous_goal": "String starting with "Success", "Failed:" or "Unknown" to evaluate if the previous next_goal is achieved. If failed or unknown describe why.",
-		"memory": "Your memory with things you need to remeber until the end of the task for the user. You can also store overall progress in a bigger task. You have access to this in the next steps.",
+		"memory": "Your memory with things you need to remember until the end of the task for the user. You can also store overall progress in a bigger task. You have access to this in the next steps.",
 		"next_goal": "String describing the next immediate goal which can be achieved with one action"
 	}},
 	"action": {{
@@ -48,15 +48,17 @@ class SystemPrompt:
 		    str: Important rules
 		"""
 		return """
-1. Only use indexes that exist in the input list for click or input text actions. If no indexes exist, try alternative actions, e.g. go back, search google etc.
-2. If stuck, try alternative approaches, e.g. go back, search google, or extract_page_content
-3. When you are done with the complete task, use the done action. Make sure to have all information the user needs and return the result.
-4. If an image is provided, use it to understand the context, the bounding boxes around the buttons have the same indexes as the interactive elements.
-6. ALWAYS respond in the RESPONSE FORMAT with valid JSON.
-7. If the page is empty use actions like "go_to_url", "search_google" or "open_tab"
-8. Remember: Choose EXACTLY ONE action per response. Invalid combinations or multiple actions will be rejected.
-9. If popups like cookies appear, accept or close them
-10. Call 'done' when you are done with the task - dont hallucinate or make up actions which the user did not ask for
+1. Only use indexes that exist in the input list for click or input text actions. If no indexes exist, try alternative actions, e.g. go back etc.
+2  If you find an index that can be used for customer help or chatbot, omit them. If you accidentally open them, close them.
+3. If stuck, first use action 'load_checkpoint' to go back to latest successful url. Unless, try alternative approaches, e.g. go back, or extract_page_content
+4. If you fail to click element on login page, use action 'perform_login' to login to the website.
+5. When you are done with the complete task, use the done action. Make sure to have all information the user needs and return the result.
+6. If an image is provided, use it to understand the context, the bounding boxes around the buttons have the same indexes as the interactive elements.
+7. ALWAYS respond in the RESPONSE FORMAT with valid JSON.
+8. If the page is empty use actions like "go_to_url", "search_google" or "open_tab"
+9. Remember: Choose EXACTLY ONE action per response. Invalid combinations or multiple actions will be rejected.
+10. If popups like cookies appear, accept or close them
+11. Call 'done' when you are done with the task - dont hallucinate or make up actions which the user did not ask for
 	"""
 
 	def input_format(self) -> str:

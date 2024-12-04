@@ -6,6 +6,7 @@ from browser_use.agent.views import ActionModel, ActionResult
 from browser_use.browser.context import BrowserContext
 from browser_use.controller.registry.service import Registry
 from browser_use.controller.views import (
+	CheckpointAction,
 	ClickElementAction,
 	DoneAction,
 	ExtractPageContentAction,
@@ -52,6 +53,12 @@ class Controller:
 			await page.go_back()
 			await page.wait_for_load_state()
 
+		@self.registry.action('Perform login', requires_browser=True)
+		async def perform_login(browser: BrowserContext):
+			page = await browser.get_current_page()
+			await page.wait_for_load_state()
+			await page.keyboard.press('Enter')
+  
 		# Element Interaction Actions
 		@self.registry.action(
 			'Click element', param_model=ClickElementAction, requires_browser=True
@@ -169,6 +176,12 @@ class Controller:
 				extracted_content=f'Scrolled up the page by {amount} pixels',
 				include_in_memory=True,
 			)
+	
+
+		@self.registry.action('Load checkpoint', param_model=CheckpointAction)
+		def load_checkpoint(ckpt: CheckpointAction):
+			checkpoint_url = self.registry.load_checkpoint()
+			return ActionResult(checkpoint_url=checkpoint_url, include_in_memory=True)
 
 	def action(self, description: str, **kwargs):
 		"""Decorator for registering custom actions
@@ -176,7 +189,13 @@ class Controller:
 		@param description: Describe the LLM what the function does (better description == better function calling)
 		"""
 		return self.registry.action(description, **kwargs)
+	
+	def _save_checkpoint(self, ckpt: CheckpointAction):
+		print("Saving checkpoint...")
+		self.registry.save_checkpoint(ckpt)
+		return ActionResult(extracted_content=f"Checkpoint saved {ckpt.url}", include_in_memory=True)
 
+ 
 	@time_execution_sync('--act')
 	async def act(self, action: ActionModel, browser_context: BrowserContext) -> ActionResult:
 		"""Execute an action"""

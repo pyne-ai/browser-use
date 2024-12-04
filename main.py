@@ -64,14 +64,14 @@ async def main():
     agent = Agent(task=task, llm=model, controller=controller)
     otc_agent = OTCAgent(llm=model)
  
-    # history : AgentHistoryList = await agent.run()
+    history : AgentHistoryList = await agent.run()
     history_path = 'history.json'
-    # agent.save_history(file_path=history_path)
+    agent.save_history(file_path=history_path)
     
     
-    history_content = json.load(open(history_path))
-    history = AgentHistoryList.model_validate(history_content)
-    print("History content:", type(history_content))
+    # history_content = json.load(open(history_path))
+    # history = AgentHistoryList.model_validate(history_content)
+    # print("History content:", type(history_content))
  
     for i, h in enumerate(history.history):
         print("State was:", h.state.title)

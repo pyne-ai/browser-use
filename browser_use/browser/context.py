@@ -292,6 +292,11 @@ class BrowserContext:
 			'facebook.com/plugins',
 			'platform.twitter',
 			'linkedin.com/embed',
+			'intercom',
+			'pyne',
+			'widget',
+			'api-iam',
+			'intercomcdn'
 			# Live chat and support
 			'livechat',
 			'zendesk',
@@ -301,6 +306,7 @@ class BrowserContext:
 			# Push notifications
 			'push-notifications',
 			'onesignal',
+   			
 			'pushwoosh',
 			# Background sync/heartbeat
 			'heartbeat',
@@ -313,6 +319,8 @@ class BrowserContext:
 			# Common CDNs for dynamic content
 			'cloudfront.net',
 			'fastly.net',
+   			'intercomcdn.com',
+			'intercom.io',
 		}
 
 		async def on_request(request):
@@ -453,6 +461,11 @@ class BrowserContext:
 		await page.goto(url)
 		await page.wait_for_load_state()
 
+	async def get_current_page_url(self) -> str:
+		"""Get the current page URL"""
+		page = await self.get_current_page()
+		return page.url
+
 	async def refresh_page(self):
 		"""Refresh the current page"""
 		page = await self.get_current_page()
@@ -518,7 +531,7 @@ class BrowserContext:
 		if use_vision:
 			screenshot_b64 = await self.take_screenshot()
 
-		cleaned_html = htmlrag.clean_html(page_html)
+		# cleaned_html = htmlrag.clean_html(page_html)
   
   
 		self.current_state = BrowserState(

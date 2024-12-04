@@ -25,7 +25,7 @@ class ActionResult(BaseModel):
 	extracted_content: Optional[str] = None
 	error: Optional[str] = None
 	include_in_memory: bool = False  # whether to include in past messages as context or not
-
+	checkpoint_url: Optional[str] = None
 
 class Thought(BaseModel):
 	"""Thoughts of the agent"""
@@ -35,7 +35,7 @@ class Thought(BaseModel):
  
 class SuccessfullClick(BaseModel):
 	"""Result of a successful click action"""
-
+	
 	xpath: str
 	text: str
 	thought: Thought

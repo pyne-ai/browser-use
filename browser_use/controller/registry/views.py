@@ -28,7 +28,6 @@ class RegisteredAction(BaseModel):
 		s += '}'
 		return s
 
-
 class ActionModel(BaseModel):
 	"""Base model for dynamically created action models"""
 

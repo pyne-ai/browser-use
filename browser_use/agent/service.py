@@ -32,6 +32,7 @@ from browser_use.browser.context import BrowserContext
 from browser_use.browser.views import BrowserState, BrowserStateHistory
 from browser_use.controller.registry.views import ActionModel
 from browser_use.controller.service import Controller
+from browser_use.controller.views import CheckpointAction
 from browser_use.dom.history_tree_processor import DOMHistoryElement, HistoryTreeProcessor
 from browser_use.telemetry.service import ProductTelemetry
 from browser_use.telemetry.views import (
@@ -66,7 +67,7 @@ class Agent:
 		max_error_length: int = 400,
 	):
 		self.agent_id = str(uuid.uuid4())  # unique identifier for the agent
-
+		
 		self.task = task
 		self.use_vision = use_vision
 		self.llm = llm
@@ -236,12 +237,23 @@ class Agent:
 		response: dict[str, Any] = await structured_llm.ainvoke(input_messages)  # type: ignore
 
 		parsed: AgentOutput = response['parsed']
-
+		if parsed.current_state.valuation_previous_goal == 'Success':
+			page_url = await self.browser_context.get_current_page_url()
+			self._save_checkpoint(page_url)
+  
 		self._log_response(parsed)
 		self.n_steps += 1
 
 		return parsed
-
+	
+	def _save_checkpoint(self, url: str) -> None:
+		"""Save the current checkpoint URL to a file"""
+		if not url:
+			return
+		ckpt = CheckpointAction(url=url)
+		self.controller._save_checkpoint(ckpt)
+		return
+    
 	def _log_response(self, response: Any) -> None:
 		"""Log the model's response"""
 		if 'Success' in response.current_state.valuation_previous_goal:

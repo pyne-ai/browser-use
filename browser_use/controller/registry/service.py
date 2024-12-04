@@ -10,6 +10,7 @@ from browser_use.controller.registry.views import (
 	ActionRegistry,
 	RegisteredAction,
 )
+from browser_use.controller.views import CheckpointAction
 from browser_use.telemetry.service import ProductTelemetry
 from browser_use.telemetry.views import (
 	ControllerRegisteredFunctionsTelemetryEvent,
@@ -23,6 +24,7 @@ class Registry:
 	def __init__(self):
 		self.registry = ActionRegistry()
 		self.telemetry = ProductTelemetry()
+		self.checkpoint_url = None 
 
 	def _create_param_model(self, function: Callable) -> Type[BaseModel]:
 		"""Creates a Pydantic model from function signature"""
@@ -132,3 +134,16 @@ class Registry:
 	def get_prompt_description(self) -> str:
 		"""Get a description of all actions for the prompt"""
 		return self.registry.get_prompt_description()
+
+
+	def save_checkpoint(self, ckpt: CheckpointAction):
+		print("checkpoint was:", self.checkpoint_url)
+		self.checkpoint_url = ckpt.url
+		print("checkpoint is now:", self.checkpoint_url)
+  
+		return f"Checkpoint {ckpt.url} saved"
+
+
+	def load_checkpoint(self):
+			print("Loading checkpoint...")
+			return f"Checkpoint {self.checkpoint_url} loaded"
