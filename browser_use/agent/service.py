@@ -322,7 +322,7 @@ class Agent:
             )
         )
 
-    async def run(self, max_steps: int = 100) -> AgentHistoryList:
+    async def run(self, max_steps: int = 50) -> AgentHistoryList:
         """Execute the task with maximum number of steps"""
         try:
             logger.info(f"🚀 Starting task: {self.task}")
