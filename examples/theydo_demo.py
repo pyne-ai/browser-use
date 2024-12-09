@@ -5,7 +5,6 @@ import os
 import sys
 import uuid
 
-import htmlrag
 from langchain_core.messages import (
     SystemMessage,
 )
@@ -16,7 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from browser_use.browser.context import BrowserContext
 from browser_use.dom.views import DOMState
-
+import htmlrag
 from datetime import datetime
 import asyncio
 from typing import List, Optional, Union
@@ -39,6 +38,10 @@ supabase_url = os.environ.get("SUPABASE_URL")
 controller = Controller()
 
 
+class GuideIntroMessage(BaseModel):
+    text: str
+
+
 class AgentStep(BaseModel):
     description: str
     xpath_id: str
@@ -46,7 +49,7 @@ class AgentStep(BaseModel):
 
     @field_validator("step_type")
     def set_default_step_type(cls, value):
-        return value or "userClick"
+        return "userClick"
 
 
 class Section(BaseModel):
@@ -77,7 +80,7 @@ class WebpageInfo(BaseModel):
 
 
 class UserLogin(BaseModel):
-    username: str = "berkant+auto4@pyne.ai"
+    username: str = "berkant+livedemo@pyne.ai"
     password: str = "Password!123"
 
 
@@ -182,12 +185,13 @@ task = """
             - If you cannot proceed on login page, you must use action 'perform_login' to bypass.
 
 
-        1.  Create a journey with basic template.
+        1.  Start a journey. Select theydo templates. Choose basic customer journey template.
         2.  Use sample transcript as the evidence for the journey mapping. Add evidence to the journey. Pick template.
-        3.  Go to journeys again. Open '[AI] Sample Journey'. Display opportunity matrix.
-        5.  Go back to the journey library.
-        6.  If you stuck in a loop. Finish the task.
-        6.  Done.
+        3.  Go to journeys again. Open '[AI] Sample Journey'.
+        4.  Navigate to Opportunuties.
+        5.  Display opportunity matrix.
+        6.  Go back to the journey library.
+        7.  Done.
         """
 
 
@@ -198,7 +202,7 @@ task = """
 #             - If you cannot proceed on login page, you must use action 'perform_login' to bypass.
 
 
-#         1. Create a journey with basic template.
+#         1. Start a journey with basic template.
 #         2. Go back to the journey library.
 #         3. Open sample journey. Navigate the opportunitites and go to matrix tab.
 #         6. If you stuck in a loop. Finish the task.
@@ -213,7 +217,7 @@ agent = Agent(
 )
 
 
-def map_input_to_model(input_data: str, xpaths: dict[str, str]):
+def map_input_to_model(intro: str, input_data: str, xpaths: dict[str, str]):
     """
     Accepts a JSON string as input, parses it, and converts it to the required model format.
 
@@ -226,11 +230,59 @@ def map_input_to_model(input_data: str, xpaths: dict[str, str]):
     # Parse the JSON string into a Python dictionary
     try:
         parsed_data = json.loads(input_data)
+        intro_data = json.loads(intro)
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON string provided: {e}")
 
     paragraphs = []
     references = []
+
+    # Create the introductory message
+    intro_message = GuideIntroMessage(text=intro_data.get("text"))
+    intro_uuid = generate_uuid()
+    paragraph = ParagraphContent(
+        type="paragraph",
+        content=[
+            Step(
+                type="step",
+                attrs=StepAttributes(id=intro_uuid, type="question"),
+                content=[StepContent(type="text", text=intro_message.text)],
+            )
+        ],
+    )
+    paragraphs.append(paragraph)
+    intro_reference = {
+        "id": intro_uuid,
+        "type": "anotation",
+        "from": 1,
+        "to": 1,
+        "createdAt": "2024-12-03T13:48:03.020Z",
+        "item": {
+            "isCheckpoint": True,
+            "onTrackConditions": {"isEnabled": True, "conditions": []},
+            "type": "question",
+            "questionType": "multipleChoice",
+            "choices": [
+                {
+                    "id": "80875365-3d60-4ad4-ae6a-7434067a7867",
+                    "text": "Yes",
+                    "type": "proceedNext",
+                    "buttonVariant": "primary",
+                },
+                {
+                    "id": "d1f48ea7-4b93-402f-b814-57a2bde7811e",
+                    "text": "Not now",
+                    "type": "suspendTour",
+                    "buttonVariant": "secondary",
+                },
+            ],
+            "title": "Would you like to start a demo?",
+        },
+        "orphaned": False,
+        "offsetTop": 66,
+    }
+
+    references.append(intro_reference)
 
     for action in parsed_data.get("actions", []):
         for section in action.get("sections", []):
@@ -292,7 +344,58 @@ def map_input_to_model(input_data: str, xpaths: dict[str, str]):
     }
 
 
+async def create_intro_message(tour_description: str):
+    with open("success.json", "r") as f:
+        data = json.load(f)
+        introductory_model = ChatOpenAI(model="gpt-4o").with_structured_output(
+            GuideIntroMessage, include_raw=False, strict=True
+        )
+
+        human_message = HumanMessage(
+            content=[
+                {
+                    "type": "text",
+                    "text": f"Actions: {data}",
+                },
+                {"type": "text", "text": f"Tour description is: {tour_description}"},
+            ]
+        )
+
+        system_message = SystemMessage(
+            content=[
+                {
+                    "type": "text",
+                    "text": """
+                    Important rules:
+                    1. Avoid cookies or login-related actions in the output.
+                    2. Do not reference or hint at the input actions, steps, or user progress in the welcome message.
+                    3. Always conclude the text with an engaging question that asks them to they want a demo or not.
+                    4. Use the ADAI (Attention, Desire, Action, Impact) method to create a compelling and engaging message but keep the attention part more smooth for website onboard video.
+                    5. Be clear, engaging, and universally relevant to new users, avoiding any reliance on context from the input actions.
+                    6. Use company name in the welcome message.
+                    You are a website demo agent welcoming new users. Your task is to create a generic and engaging introduction that conveys the core value of the platform and encourages exploration, regardless of any specific user actions or progress.
+
+                    Example input actions:
+                    [
+                        "{\"id\":\"19\",\"xpath\":\"html/body/div[2]/div/div[4]/div/div[2]/div[2]/div[2]/div[3]/span/button\",\"text\":\"Click 'Continue' to proceed with the journey creation using the selected template.\",\"thought\":{\"memory\":\"Selected the basic customer journey template. Ready to proceed with adding evidence.\",\"next_goal\":\"Click 'Continue' to proceed with the journey creation using the selected template.\"}}",
+                        "{\"id\":\"20\",\"xpath\":\"html/body/div[2]/div/div[4]/div/div[2]/div[2]/div[2]/div[2]/div/div/div/span/div/button\",\"text\":\"Click 'I want to add evidence' to proceed with adding evidence.\",\"thought\":{\"memory\":\"Journey creation started. Ready to add evidence.\",\"next_goal\":\"Click 'I want to add evidence' to proceed with adding evidence.\"}}"
+                    ]
+                    """,
+                }
+            ]
+        )
+
+        msg = [system_message, human_message]
+        response = await introductory_model.ainvoke(msg)
+        structured_output = GuideIntroMessage.model_validate(response)
+
+        print("Response from the introductory model:", response)
+        return structured_output
+
+
 async def main():
+    tour_description = "I want to have an in product tour for TheyDo AI journey feature. Tour should create an AI journey with basic template and after the creation it should show opportunity matrix and highlight that our customers find opportunity matrix page the be the most convincing communication tool to align their leadership team as well as other stakeholders."
+
     history: AgentHistoryList = await agent.run()
 
     history_path = "history.json"
@@ -332,65 +435,15 @@ async def main():
     )
 
     response = await summarizer_model.ainvoke(messages)
-    logging.info("Response from the summarizer model:", response)
     structured_output = ActionSummaryList.model_validate(response)
-    logging.info("Structured output:", structured_output)
 
-    # xpaths = {"1": "test", "2": "stest"}
+    intro_message = await create_intro_message(tour_description=tour_description)
+    output = map_input_to_model(
+        intro_message.model_dump_json(), structured_output.model_dump_json(), xpaths
+    )
+    output_json = json.dumps(output)
 
-    # input_data = """
-    #     {
-    #         "actions": [
-    #             {
-    #                 "sections": [
-    #                     {
-    #                         "section_name": "Create a Customer Journey",
-    #                         "steps": [
-    #                             {
-    #                                 "description": "Create a journey using the basic customer journey template.",
-    #                                 "xpath_id": "1",
-    #                                 "step_type": "userClick"
-    #                             },
-    #                             {
-    #                                 "description": "Click 'Continue' to proceed with the selected template.",
-    #                                 "xpath_id": "1",
-    #                                 "step_type": "userClick"
-    #                             },
-    #                             {
-    #                                 "description": "Click 'I want to add evidence' to proceed with adding evidence to the journey.",
-    #                                 "xpath_id": "1",
-    #                                 "step_type": "userClick"
-    #                             }
-    #                         ]
-    #                     },
-    #                     {
-    #                         "section_name": "Interact with the Dashboard and Opportunity Matrix",
-    #                         "steps": [
-    #                             {
-    #                                 "description": "Continue to the dashboard to proceed.",
-    #                                 "xpath_id": "2",
-    #                                 "step_type": "userClick"
-    #                             }
-    #                         ]
-    #                     },
-    #                     {
-    #                         "section_name": "Navigate Back to the Journey Library",
-    #                         "steps": [
-    #                             {
-    #                                 "description": "Go back to the journey library.",
-    #                                 "xpath_id": "1",
-    #                                 "step_type": "userClick"
-    #                             }
-    #                         ]
-    #                     }
-    #                 ]
-    #             }
-    #         ]
-    #     }"""
-
-    output = map_input_to_model(structured_output.model_dump_json(), xpaths)
-
-    print("Output:", json.dumps(output, indent=4))
+    print("Output:", output_json)
 
     res = requests.post(
         "http://localhost:3000/api/storyteller",
@@ -398,10 +451,62 @@ async def main():
             "test-ai-storyteller-key": "8MRVo444GP5FGVGm51whO0FXgXKhw1YwsXrTQajbaXdrQo26WG2Y8dA4k690dksv",
             "Content-Type": "application/json",
         },
-        json=json.dumps(output, indent=4),
+        json=output_json,
     )
 
     print("Response from the Storyteller API:", res.json())
+
+    # with open("success.json", "r") as f:
+    #     data = json.load(f)
+    #     introductory_model = ChatOpenAI(model="gpt-4o").with_structured_output(
+    #         GuideIntroMessage, include_raw=False, strict=True
+    #     )
+
+    #     human_message = HumanMessage(
+    #         content=[
+    #             {
+    #                 "type": "text",
+    #                 "text": f"Actions: {data}",
+    #                 "text": f"User's tour description:{tour_description}",
+    #             },
+    #         ]
+    #     )
+
+    #     system_message = SystemMessage(
+    #         content=[
+    #             {
+    #                 "type": "text",
+    #                 "text": """
+    #             Important rules:
+    #             1. Avoid cookies or login-related actions in the output.
+    #             2. Do not reference or hint at the input actions, steps, or user progress in the welcome message.
+    #             3. Always conclude the text with an engaging question that asks them to they want a demo or not.
+    #             5. Be clear, engaging, and universally relevant to new users, avoiding any reliance on context from the input actions.
+    #             6. Use input user task description to create a compelling and engaging message.
+    #             7. Do not exceed 7 seconds of reading time for the welcome message.
+
+    #             You are a website demo agent welcoming new users. Your task is to create a generic and engaging introduction that conveys the core value of the platform and encourages exploration, regardless of any specific user actions or progress.
+
+    #             Example input actions:
+    #             [
+    #                 "{\"id\":\"19\",\"xpath\":\"html/body/div[2]/div/div[4]/div/div[2]/div[2]/div[2]/div[3]/span/button\",\"text\":\"Click 'Continue' to proceed with the journey creation using the selected template.\",\"thought\":{\"memory\":\"Selected the basic customer journey template. Ready to proceed with adding evidence.\",\"next_goal\":\"Click 'Continue' to proceed with the journey creation using the selected template.\"}}",
+    #                 "{\"id\":\"20\",\"xpath\":\"html/body/div[2]/div/div[4]/div/div[2]/div[2]/div[2]/div[2]/div/div/div/span/div/button\",\"text\":\"Click 'I want to add evidence' to proceed with adding evidence.\",\"thought\":{\"memory\":\"Journey creation started. Ready to add evidence.\",\"next_goal\":\"Click 'I want to add evidence' to proceed with adding evidence.\"}}"
+    #             ]
+
+    #             Example user task:
+    #                 1. Create a journey with basic template.
+    #                 2. Go back to the journey library.
+    #                 3. Open sample journey. Navigate the opportunitites and go to matrix tab.
+    #                 6. If you stuck in a loop. Finish the task.
+    #                 6.  Done.
+    #             """,
+    #             }
+    #         ]
+    #     )
+
+    #     msg = [system_message, human_message]
+    #     intro_message = await introductory_model.ainvoke(msg)
+    #     print("Response from the introductory model:", intro_message)
 
 
 if __name__ == "__main__":
