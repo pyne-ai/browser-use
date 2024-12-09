@@ -30,8 +30,11 @@ def get_llm(provider: str):
 		raise ValueError(f'Unsupported provider: {provider}')
 
 
+task = 'Show the solution of y"(z) + sin(y(z)) = 0 from wolframalpha https://www.wolframalpha.com/'
+
+
 parser = argparse.ArgumentParser()
-parser.add_argument('query', type=str, help='The query to process')
+parser.add_argument('--query', type=str, help='The query to process', default=task)
 parser.add_argument(
 	'--provider',
 	type=str,
@@ -44,18 +47,22 @@ args = parser.parse_args()
 
 llm = get_llm(args.provider)
 
-browser = Browser(config=BrowserConfig(headless=False))
+
+browser = Browser(
+	config=BrowserConfig(
+		# chrome_instance_path='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+	)
+)
 
 agent = Agent(
-	task=args.query,
-	llm=llm,
-	controller=Controller(),
-	browser=browser,
+	task=args.query, llm=llm, controller=Controller(), browser=browser, validate_output=True
 )
 
 
 async def main():
-	await agent.run()
+	await agent.run(max_steps=25)
+
+	await browser.close()
 
 
 asyncio.run(main())

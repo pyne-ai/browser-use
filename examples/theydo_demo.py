@@ -13,9 +13,9 @@ import requests
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
 from browser_use.browser.context import BrowserContext
 from browser_use.dom.views import DOMState
-import htmlrag
 from datetime import datetime
 import asyncio
 from typing import List, Optional, Union
@@ -76,7 +76,7 @@ class LoginInfo(BaseModel):
 
 
 class WebpageInfo(BaseModel):
-    link: str = "https://theydo.com"
+    link: str = "https://www.theydo.com"
 
 
 class UserLogin(BaseModel):
@@ -144,57 +144,6 @@ def login(user: UserLogin):
     return user.model_dump_json()
 
 
-@controller.action("Get page context", requires_browser=True)
-async def get_page_context(browser: BrowserContext):
-    logging.info("Getting page context..")
-    agent = ChatOpenAI(model="gpt-4o")  # type: ignore
-    page = await browser.get_page_html()
-    cleaned_html = htmlrag.clean_html(page)
-
-    human_message = HumanMessage(
-        content=[
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/png;base64,{browser.current_state.screenshot}"
-                },
-            },
-            {"type": "text", "text": f"Here is the cleaned html page: {cleaned_html}"},
-        ]
-    )
-
-    system_message = SystemMessage(
-        content=[
-            {
-                "type": "text",
-                "text": "Please analyze the page and provide me with the context.",
-            },
-        ]
-    )
-
-    msg = [system_message, human_message]
-
-    response = await agent.ainvoke(msg)
-    return ActionResult(extracted_content=response.model_dump_json())
-
-
-task = """
-        IMPORTANT RULES:
-            - If task requires login use action 'login' to login to the website.
-            - If you face with any trial limit error popup, close it.
-            - If you cannot proceed on login page, you must use action 'perform_login' to bypass.
-
-
-        1.  Start a journey. Select theydo templates. Choose basic customer journey template.
-        2.  Use sample transcript as the evidence for the journey mapping. Add evidence to the journey. Pick template.
-        3.  Go to journeys again. Open '[AI] Sample Journey'.
-        4.  Navigate to Opportunuties.
-        5.  Display opportunity matrix.
-        6.  Go back to the journey library.
-        7.  Done.
-        """
-
-
 # task = """
 #         IMPORTANT RULES:
 #             - If task requires login use action 'login' to login to the website.
@@ -202,12 +151,24 @@ task = """
 #             - If you cannot proceed on login page, you must use action 'perform_login' to bypass.
 
 
-#         1. Start a journey with basic template.
-#         2. Go back to the journey library.
-#         3. Open sample journey. Navigate the opportunitites and go to matrix tab.
-#         6. If you stuck in a loop. Finish the task.
-#         6.  Done.
+#         1.  Start a journey. Select theydo templates. Choose basic customer journey template.
+#         2.  Use sample transcript as the evidence for the journey mapping. Add evidence to the journey. Pick template.
+#         3.  Go to journeys again. Open '[AI] Sample Journey'.
+#         4.  Navigate to Opportunuties.
+#         5.  Display opportunity matrix.
+#         6.  Go back to the journey library.
+#         7.  Done.
 #         """
+
+
+task = """
+        IMPORTANT RULES:
+            - If task requires login use action 'login' to login to the website.
+            - If you face with any trial limit error popup, close it.
+            - If you cannot proceed on login page, you must use action 'perform_login' to bypass.
+            
+        1- Interact all the items in the page and provide me a final context of the whole webpage. 
+        """
 
 model = ChatOpenAI(model="gpt-4o")
 agent = Agent(
@@ -442,8 +403,6 @@ async def main():
         intro_message.model_dump_json(), structured_output.model_dump_json(), xpaths
     )
     output_json = json.dumps(output)
-
-    print("Output:", output_json)
 
     res = requests.post(
         "http://localhost:3000/api/storyteller",

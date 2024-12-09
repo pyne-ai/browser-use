@@ -5,45 +5,45 @@ from pydantic import BaseModel
 
 # Action Input Models
 class SearchGoogleAction(BaseModel):
-	query: str
+    query: str
 
 
 class GoToUrlAction(BaseModel):
-	url: str
+    url: str
 
 
 class ClickElementAction(BaseModel):
-	index: int
-	num_clicks: int = 1
-	xpath: Optional[str] = None
+    index: int
+    xpath: Optional[str] = None
 
 
 class InputTextAction(BaseModel):
-	index: int
-	text: str
-	xpath: Optional[str] = None
+    index: int
+    text: str
+    xpath: Optional[str] = None
 
 
 class DoneAction(BaseModel):
-	text: str
+    text: str
 
 
 class SwitchTabAction(BaseModel):
-	page_id: int
+    page_id: int
 
 
 class OpenTabAction(BaseModel):
-	url: str
+    url: str
 
 
 class ExtractPageContentAction(BaseModel):
-	value: Literal['text', 'markdown', 'html'] = 'text'
+    value: Literal["text", "markdown", "html"] = "text"
 
 
 class ScrollAction(BaseModel):
-	amount: Optional[int] = None  # The number of pixels to scroll. If None, scroll down/up one page
+    amount: Optional[int] = (
+        None  # The number of pixels to scroll. If None, scroll down/up one page
+    )
 
 
-class CheckpointAction(BaseModel):
-	url: str
-	
+class SendKeysAction(BaseModel):
+    keys: str
