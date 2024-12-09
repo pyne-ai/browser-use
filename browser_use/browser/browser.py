@@ -5,8 +5,8 @@ Playwright browser on steroids.
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from playwright._impl._api_structures import ProxySettings
 
+from playwright._impl._api_structures import ProxySettings
 from playwright.async_api import Browser as PlaywrightBrowser
 from playwright.async_api import (
     Playwright,
@@ -167,7 +167,7 @@ class Browser:
                         "--no-default-browser-check",
                         "--no-startup-window",
                         "--window-position=0,0",
-                        # '--window-size=3000,3000',
+                        # '--window-size=1280,1000',
                     ]
                     + disable_security_args
                     + self.config.extra_chromium_args,

@@ -228,7 +228,7 @@ class BrowserContext:
             # Original code for creating new context
             context = await browser.new_context(
                 viewport=self.config.browser_window_size,
-                no_viewport=self.config.no_viewport,
+                no_viewport=False,
                 user_agent=(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                     "(KHTML, like Gecko) Chrome/85.0.4183.102 Safari/537.36"
@@ -254,32 +254,32 @@ class BrowserContext:
         # Expose anti-detection scripts
         await context.add_init_script(
             """
-			// Webdriver property
-			Object.defineProperty(navigator, 'webdriver', {
-				get: () => undefined
-			});
+            // Webdriver property
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
 
-			// Languages
-			Object.defineProperty(navigator, 'languages', {
-				get: () => ['en-US', 'en']
-			});
+            // Languages
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['en-US', 'en']
+            });
 
-			// Plugins
-			Object.defineProperty(navigator, 'plugins', {
-				get: () => [1, 2, 3, 4, 5]
-			});
+            // Plugins
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [1, 2, 3, 4, 5]
+            });
 
-			// Chrome runtime
-			window.chrome = { runtime: {} };
+            // Chrome runtime
+            window.chrome = { runtime: {} };
 
-			// Permissions
-			const originalQuery = window.navigator.permissions.query;
-			window.navigator.permissions.query = (parameters) => (
-				parameters.name === 'notifications' ?
-					Promise.resolve({ state: Notification.permission }) :
-					originalQuery(parameters)
-			);
-			"""
+            // Permissions
+            const originalQuery = window.navigator.permissions.query;
+            window.navigator.permissions.query = (parameters) => (
+                parameters.name === 'notifications' ?
+                    Promise.resolve({ state: Notification.permission }) :
+                    originalQuery(parameters)
+            );
+            """
         )
 
         return context
