@@ -76,7 +76,7 @@ class LoginInfo(BaseModel):
 
 
 class WebpageInfo(BaseModel):
-    link: str = "https://theydo.com"
+    link: str = "https://app.theydo.com/"
 
 
 class UserLogin(BaseModel):
@@ -184,15 +184,18 @@ task = """
             - If you face with any trial limit error popup, close it.
             - If you cannot proceed on login page, you must use action 'perform_login' to bypass.
 
-
-        1.  Start a journey. Select theydo templates. Choose basic customer journey template.
-        2.  Use sample transcript as the evidence for the journey mapping. Add evidence to the journey. Pick template.
-        3.  Go to journeys again. Open '[AI] Sample Journey'.
-        4.  Navigate to Opportunuties.
-        5.  Display opportunity matrix.
-        6.  Go back to the journey library.
-        7.  Done.
-        """
+        1. Log into TheyDo: Access your TheyDo account.
+        2. Navigate to Dashboard: Once logged in, go to your dashboard.
+        3. Initiate AI Journey Mapping: Click on 'Map a Journey with AI'.
+        4. Choose Journey Type: Select either 'Start with a Template' or 'Build from Scratch'.
+        5. Select Mapping Method: Choose between 'Map with AI' (using existing research) or 'Map it Yourself' (without prior research).
+        6. Provide Research Data: If using 'Map with AI', upload a .txt file or paste text into the "raw transcript" box.
+        7. Generate Journey: Click 'Generate' to allow AI to process the data.
+        8. Wait for Completion: The process takes a few minutes; you'll receive an email notification once done.
+        9. Review Generated Journey: Examine the AI-generated journey, noting insights marked with a diamond symbol.
+        10. Refine as Needed: Adjust any aspects of the journey to better fit your objectives.
+        11. Save Journey: Once satisfied, save the journey for future use.
+    """
 
 
 # task = """
