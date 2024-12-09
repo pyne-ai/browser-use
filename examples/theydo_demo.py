@@ -76,7 +76,7 @@ class LoginInfo(BaseModel):
 
 
 class WebpageInfo(BaseModel):
-    link: str = "https://www.theydo.com"
+    link: str = "https://theydo.com"
 
 
 class UserLogin(BaseModel):
@@ -144,31 +144,22 @@ def login(user: UserLogin):
     return user.model_dump_json()
 
 
-# task = """
-#         IMPORTANT RULES:
-#             - If task requires login use action 'login' to login to the website.
-#             - If you face with any trial limit error popup, close it.
-#             - If you cannot proceed on login page, you must use action 'perform_login' to bypass.
-
-
-#         1.  Start a journey. Select theydo templates. Choose basic customer journey template.
-#         2.  Use sample transcript as the evidence for the journey mapping. Add evidence to the journey. Pick template.
-#         3.  Go to journeys again. Open '[AI] Sample Journey'.
-#         4.  Navigate to Opportunuties.
-#         5.  Display opportunity matrix.
-#         6.  Go back to the journey library.
-#         7.  Done.
-#         """
-
-
 task = """
         IMPORTANT RULES:
             - If task requires login use action 'login' to login to the website.
             - If you face with any trial limit error popup, close it.
             - If you cannot proceed on login page, you must use action 'perform_login' to bypass.
-            
-        1- Interact all the items in the page and provide me a final context of the whole webpage. 
+
+
+        1.  Start a journey. Select theydo templates. Choose basic customer journey template.
+        2.  Use sample transcript as the evidence for the journey mapping. Add evidence to the journey. Pick template.
+        3.  Go to journeys again. Open '[AI] Sample Journey'.
+        4.  Navigate to Opportunuties.
+        5.  Display opportunity matrix.
+        6.  Go back to the journey library.
+        7.  Done.
         """
+
 
 model = ChatOpenAI(model="gpt-4o")
 agent = Agent(
@@ -374,29 +365,29 @@ async def main():
     for i, t in enumerate(history.successful_actions()):
         thoughts_str += f"{i}. Intention was:{t.text}: \n Clicked element key was: {t.id}\n Memory: {t.thought.memory}\n Next goal: {t.thought.next_goal}\n"
 
-    messages = [
-        (
-            "system",
-            """
-                 You are a website agent click analyzer. Use the following actions to analyze the website clicks.
-                 Remove duplicated actions to reduce redundancy.
-                 Do not hallucinate or make up actions which the user did not ask for, and keep the flow of the actions in logical order derived from the thoughts.
-                 Do not include anything related with login and cookie settings in the output.
-                 Use clicked element key to identify the clicked element.
-                """,
-        ),
-        (
-            "human",
-            f"Actions taken are:{thoughts_str}",
-        ),
-    ]
+        messages = [
+            (
+                "system",
+                """
+                    You are a website agent click analyzer. Use the following actions to analyze the website clicks.
+                    Remove duplicated actions to reduce redundancy.
+                    Do not hallucinate or make up actions which the user did not ask for, and keep the flow of the actions in logical order derived from the thoughts.
+                    Do not include anything related with login and cookie settings in the output.
+                    Use clicked element key to identify the clicked element.
+                    """,
+            ),
+            (
+                "human",
+                f"Actions taken are:{thoughts_str}",
+            ),
+        ]
 
-    summarizer_model = ChatOpenAI(model="gpt-4o").with_structured_output(
-        ActionSummaryList, include_raw=False, strict=True
-    )
+        summarizer_model = ChatOpenAI(model="gpt-4o").with_structured_output(
+            ActionSummaryList, include_raw=False, strict=True
+        )
 
-    response = await summarizer_model.ainvoke(messages)
-    structured_output = ActionSummaryList.model_validate(response)
+        response = await summarizer_model.ainvoke(messages)
+        structured_output = ActionSummaryList.model_validate(response)
 
     intro_message = await create_intro_message(tour_description=tour_description)
     output = map_input_to_model(

@@ -282,20 +282,6 @@ class AgentHistoryList(BaseModel):
         """Get all successful action xPaths from history"""
         successful_xpaths: List[SuccessfullClick] = []
         for i, h in enumerate(self.history):
-
-            print(
-                "history : ",
-                {
-                    "model_output": h.model_output,
-                    "result": h.result,
-                    "xpath": h.state.interacted_element,
-                    "currentstate": (
-                        h.model_output.current_state.evaluation_previous_goal
-                        if h.model_output and h.model_output.current_state
-                        else "None"
-                    ),
-                },
-            )
             if h.model_output and h.state.interacted_element:
 
                 if (
@@ -308,10 +294,8 @@ class AgentHistoryList(BaseModel):
                         memory=h.model_output.current_state.memory.strip(),
                         next_goal=h.model_output.current_state.next_goal.strip(),
                     )
-                    selector = h.state.to_dict()
                     if h.state.interacted_element is not None:
-                        print("selector : ", h.state.interacted_element)
-                        for i, element in enumerate(h.state.interacted_element):
+                        for element in h.state.interacted_element:
                             if element:
                                 click = SuccessfullClick(
                                     id=str(i),
