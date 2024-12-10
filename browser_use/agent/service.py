@@ -51,6 +51,10 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 
+def hello():
+    print("bjk  ")
+
+
 class Agent:
     def __init__(
         self,

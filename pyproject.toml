@@ -2,7 +2,8 @@
 name = "browser-use"
 description = "Make websites accessible for AI agents"
 authors = [
-    { name = "Gregor Zunic" }
+    { name = "Cagatay Yucelen", email="cagatay@pyne.ai"},
+    { name = "Berkant Ay", email = "berkant@pyne.ai"},
 ]
 version = "0.1.16"
 readme = "README.md"

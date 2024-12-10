@@ -371,7 +371,7 @@ async def main():
                 """
                     You are a website agent click analyzer. Use the following actions to analyze the website clicks.
                     Remove duplicated actions to reduce redundancy.
-                    Do not hallucinate or make up actions which the user did not ask for, and keep the flow of the actions in logical order derived from the thoughts.
+                    Do not make up actions which the user did not ask for, and keep the flow of the actions in logical order derived from the thoughts.
                     Do not include anything related with login and cookie settings in the output.
                     Use clicked element key to identify the clicked element.
                     """,
