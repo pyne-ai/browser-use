@@ -138,17 +138,9 @@ def go_to_webpage(webpage_info: WebpageInfo):
     return webpage_info.link
 
 
-@controller.action("Signin/login to website", param_model=UserLogin)
-def login(user: UserLogin):
-    print("Logging in with username:", user.username)
-    return user.model_dump_json()
-
-
 task = """
         IMPORTANT RULES:
-            - If task requires login use action 'login' to login to the website.
             - If you face with any trial limit error popup, close it.
-            - If you cannot proceed on login page, you must use action 'perform_login' to bypass.
 
 
         1.  Start a journey. Select theydo templates. Choose basic customer journey template.
