@@ -13,9 +13,9 @@ import requests
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
 from browser_use.browser.context import BrowserContext
 from browser_use.dom.views import DOMState
-import htmlrag
 from datetime import datetime
 import asyncio
 from typing import List, Optional, Union
@@ -29,6 +29,8 @@ from browser_use.agent.service import Agent
 from browser_use.agent.views import ActionResult, AgentHistoryList
 
 from browser_use.controller.service import Controller
+from langchain_community.document_loaders import AsyncHtmlLoader
+from langchain_community.document_transformers import Html2TextTransformer
 
 supabase_key = os.environ.get("SUPABASE_KEY")
 supabase_url = os.environ.get("SUPABASE_URL")
@@ -76,11 +78,13 @@ class LoginInfo(BaseModel):
 
 
 class WebpageInfo(BaseModel):
-    link: str = "https://app.theydo.com/"
+    # link: str = "https://app.theydo.com/"
+    link: str = "https://app.shortcut.com/"
 
 
 class UserLogin(BaseModel):
-    username: str = "berkant+livedemo@pyne.ai"
+    # username: str = "demo+test@pyne.ai"
+    username: str = "ashish@pyne.ai"
     password: str = "Password!123"
 
 
@@ -144,57 +148,21 @@ def login(user: UserLogin):
     return user.model_dump_json()
 
 
-@controller.action("Get page context", requires_browser=True)
-async def get_page_context(browser: BrowserContext):
-    logging.info("Getting page context..")
-    agent = ChatOpenAI(model="gpt-4o")  # type: ignore
-    page = await browser.get_page_html()
-    cleaned_html = htmlrag.clean_html(page)
+# urls = ["https://app.theydo.com/"]
+# loader = AsyncHtmlLoader(urls)
+# docs = loader.load()
+# html2text = Html2TextTransformer()
+# docs_transformed = html2text.transform_documents(docs)
 
-    human_message = HumanMessage(
-        content=[
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/png;base64,{browser.current_state.screenshot}"
-                },
-            },
-            {"type": "text", "text": f"Here is the cleaned html page: {cleaned_html}"},
-        ]
-    )
-
-    system_message = SystemMessage(
-        content=[
-            {
-                "type": "text",
-                "text": "Please analyze the page and provide me with the context.",
-            },
-        ]
-    )
-
-    msg = [system_message, human_message]
-
-    response = await agent.ainvoke(msg)
-    return ActionResult(extracted_content=response.model_dump_json())
-
-
+# print("Content extracted:", docs_transformed[0].page_content)
 task = """
-        IMPORTANT RULES:
-            - If task requires login use action 'login' to login to the website.
-            - If you face with any trial limit error popup, close it.
-            - If you cannot proceed on login page, you must use action 'perform_login' to bypass.
-
-        1. Log into TheyDo: Access your TheyDo account.
-        2. Navigate to Dashboard: Once logged in, go to your dashboard.
-        3. Initiate AI Journey Mapping: Click on 'Map a Journey with AI'.
-        4. Choose Journey Type: Select either 'Start with a Template' or 'Build from Scratch'.
-        5. Select Mapping Method: Choose between 'Map with AI' (using existing research) or 'Map it Yourself' (without prior research).
-        6. Provide Research Data: If using 'Map with AI', upload a .txt file or paste text into the "raw transcript" box.
-        7. Generate Journey: Click 'Generate' to allow AI to process the data.
-        8. Wait for Completion: The process takes a few minutes; you'll receive an email notification once done.
-        9. Review Generated Journey: Examine the AI-generated journey, noting insights marked with a diamond symbol.
-        10. Refine as Needed: Adjust any aspects of the journey to better fit your objectives.
-        11. Save Journey: Once satisfied, save the journey for future use.
+        1. **Access the Stories Page:**   - Navigate to the Stories page by selecting "Stories" in the Shortcut sidebar menu.
+        2. **Create a New Story:**   - Click on the "Create Story" button to start a new Story.
+        3. **Fill in Story Details:**   - Enter the necessary details for your Story, such as the title and description.   - Optionally, add metadata like attachments, labels, and comments.
+        4. **Assign the Story to a Team:**   - In the Story creation form, locate the "Team" field.   - Select the appropriate Team from the dropdown menu. Ensure that the Team is associated with the desired Workflow.
+        5. **Select the Workflow State:**   - Find the "Workflow State" field in the Story creation form.   - Choose the initial Workflow State for the Story. This should align with the Workflow associated with the selected Team.
+        6. **Assign Owners and Followers:**   - Assign an Owner to the Story if needed.   - Add Followers to keep them notified of the Story\'s progress.
+        7. **Save the Story:**   - Once all details are filled in, click the "Create Story" button to save and create the Story.By following these steps, you will have successfully created a Story and assigned it to a Team within a specific Workflow in Shortcut.
     """
 
 
@@ -203,13 +171,8 @@ task = """
 #             - If task requires login use action 'login' to login to the website.
 #             - If you face with any trial limit error popup, close it.
 #             - If you cannot proceed on login page, you must use action 'perform_login' to bypass.
-
-
-#         1. Start a journey with basic template.
-#         2. Go back to the journey library.
-#         3. Open sample journey. Navigate the opportunitites and go to matrix tab.
-#         6. If you stuck in a loop. Finish the task.
-#         6.  Done.
+            
+#         1- Interact all the items in the page and provide me a final context of the whole webpage. 
 #         """
 
 model = ChatOpenAI(model="gpt-4o")
@@ -401,7 +364,7 @@ async def main():
 
     history: AgentHistoryList = await agent.run()
 
-    history_path = "history.json"
+    history_path = "./history.json"
     agent.save_history(file_path=history_path)
 
     xpaths = {t.id: t.xpath for i, t in enumerate(history.successful_actions())}
@@ -445,8 +408,6 @@ async def main():
         intro_message.model_dump_json(), structured_output.model_dump_json(), xpaths
     )
     output_json = json.dumps(output)
-
-    print("Output:", output_json)
 
     res = requests.post(
         "http://localhost:3000/api/storyteller",

@@ -7,12 +7,11 @@ import base64
 import json
 import logging
 import os
+import re
 import time
 import uuid
-from dataclasses import dataclass, field
-from typing import TypedDict
-import htmlrag
-from typing import TYPE_CHECKING, TypedDict
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Optional, TypedDict
 
 from playwright.async_api import Browser as PlaywrightBrowser
 from playwright.async_api import (
@@ -26,7 +25,7 @@ from playwright.async_api import (
 
 from browser_use.browser.views import BrowserError, BrowserState, TabInfo
 from browser_use.dom.service import DomService
-from browser_use.dom.views import DOMElementNode, DOMState, SelectorMap
+from browser_use.dom.views import DOMElementNode, SelectorMap
 from browser_use.utils import time_execution_sync
 
 if TYPE_CHECKING:
@@ -62,9 +61,14 @@ class BrowserContextConfig:
             maximum_wait_page_load_time: 5.0
                     Maximum time to wait for page load before proceeding anyway
 
+            wait_between_actions: 1.0
+                    Time to wait between multiple per step actions
+
             browser_window_size: {'width': 1280, 'height': 1024}
                     Default browser window size
 
+            no_viewport: False
+                    Disable viewport
             save_recording_path: None
                     Path to save video recordings
 
@@ -76,13 +80,12 @@ class BrowserContextConfig:
     minimum_wait_page_load_time: float = 0.5
     wait_for_network_idle_page_load_time: float = 1
     maximum_wait_page_load_time: float = 5
+    wait_between_actions: float = 1
 
     disable_security: bool = False
 
-    extra_chromium_args: list[str] = field(default_factory=list)
-    browser_window_size: BrowserContextWindowSize = field(
-        default_factory=lambda: {"width": 1280, "height": 1024}
-    )
+    browser_window_size: Optional[BrowserContextWindowSize] = None
+    no_viewport: Optional[bool] = None
 
     save_recording_path: str | None = None
     trace_path: str | None = None
@@ -123,18 +126,29 @@ class BrowserContext:
         """Close the browser instance"""
         logger.debug("Closing browser context")
 
-        # check if already closed
-        if self.session is None:
-            return
+        try:
+            # check if already closed
+            if self.session is None:
+                return
 
-        await self.save_cookies()
+            await self.save_cookies()
 
-        if self.config.trace_path:
-            await self.session.context.tracing.stop(
-                path=os.path.join(self.config.trace_path, f"{self.context_id}.zip")
-            )
+            if self.config.trace_path:
+                try:
+                    await self.session.context.tracing.stop(
+                        path=os.path.join(
+                            self.config.trace_path, f"{self.context_id}.zip"
+                        )
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to stop tracing: {e}")
 
-        await self.session.context.close()
+            try:
+                await self.session.context.close()
+            except Exception as e:
+                logger.debug(f"Failed to close context: {e}")
+        finally:
+            self.session = None
 
     def __del__(self):
         """Cleanup when object is destroyed"""
@@ -207,17 +221,23 @@ class BrowserContext:
 
     async def _create_context(self, browser: PlaywrightBrowser):
         """Creates a new browser context with anti-detection measures and loads cookies if available."""
-        context = await browser.new_context(
-            viewport=self.config.browser_window_size,
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/85.0.4183.102 Safari/537.36"
-            ),
-            java_script_enabled=True,
-            bypass_csp=self.config.disable_security,
-            ignore_https_errors=self.config.disable_security,
-            record_video_dir=self.config.save_recording_path,
-        )
+        if self.browser.config.chrome_instance_path and len(browser.contexts) > 0:
+            # Connect to existing Chrome instance instead of creating new one
+            context = browser.contexts[0]
+        else:
+            # Original code for creating new context
+            context = await browser.new_context(
+                viewport=self.config.browser_window_size,
+                no_viewport=self.config.no_viewport,
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/85.0.4183.102 Safari/537.36"
+                ),
+                java_script_enabled=True,
+                bypass_csp=self.config.disable_security,
+                ignore_https_errors=self.config.disable_security,
+                record_video_dir=self.config.save_recording_path,
+            )
 
         if self.config.trace_path:
             await context.tracing.start(screenshots=True, snapshots=True, sources=True)
@@ -306,11 +326,6 @@ class BrowserContext:
             "facebook.com/plugins",
             "platform.twitter",
             "linkedin.com/embed",
-            "intercom",
-            "pyne",
-            "widget",
-            "api-iam",
-            "intercomcdn"
             # Live chat and support
             "livechat",
             "zendesk",
@@ -332,8 +347,6 @@ class BrowserContext:
             # Common CDNs for dynamic content
             "cloudfront.net",
             "fastly.net",
-            "intercomcdn.com",
-            "intercom.io",
         }
 
         async def on_request(request):
@@ -487,11 +500,6 @@ class BrowserContext:
         await page.goto(url)
         await page.wait_for_load_state()
 
-    async def get_current_page_url(self) -> str:
-        """Get the current page URL"""
-        page = await self.get_current_page()
-        return page.url
-
     async def refresh_page(self):
         """Refresh the current page"""
         page = await self.get_current_page()
@@ -532,18 +540,6 @@ class BrowserContext:
         page = await self.get_current_page()
         return await page.evaluate(script)
 
-    async def get_clickable_elements(self) -> DOMState:
-        """Get clickable elements on the page"""
-        await self.remove_highlights()
-        page = await self.get_current_page()
-        dom_service = DomService(page)
-        content = await dom_service.get_clickable_elements()
-        dom_state = DOMState(
-            element_tree=content.element_tree,
-            selector_map=content.selector_map,
-        )
-        return dom_state
-
     @time_execution_sync(
         "--get_state"
     )  # This decorator might need to be updated to handle async
@@ -561,29 +557,50 @@ class BrowserContext:
 
     async def _update_state(self, use_vision: bool = False) -> BrowserState:
         """Update and return state."""
-        await self.remove_highlights()
-        page = await self.get_current_page()
-        page_html = await self.get_page_html()
-        dom_service = DomService(page)
-        content = await dom_service.get_clickable_elements()  # Assuming this is async
+        session = await self.get_session()
 
-        screenshot_b64 = None
-        if use_vision:
-            screenshot_b64 = await self.take_screenshot()
+        # Check if current page is still valid, if not switch to another available page
+        try:
+            page = await self.get_current_page()
+            # Test if page is still accessible
+            await page.evaluate("1")
+        except Exception as e:
+            logger.debug(f"Current page is no longer accessible: {str(e)}")
+            # Get all available pages
+            pages = session.context.pages
+            if pages:
+                session.current_page = pages[-1]
+                page = session.current_page
+                logger.debug(f"Switched to page: {await page.title()}")
+            else:
+                raise BrowserError("No valid pages available")
 
-        # cleaned_html = htmlrag.clean_html(page_html)
+        try:
+            await self.remove_highlights()
+            dom_service = DomService(page)
+            content = await dom_service.get_clickable_elements()
 
-        self.current_state = BrowserState(
-            element_tree=content.element_tree,
-            selector_map=content.selector_map,
-            url=page.url,
-            title=await page.title(),
-            html=page_html,
-            tabs=await self.get_tabs_info(),
-            screenshot=screenshot_b64,
-        )
+            screenshot_b64 = None
+            if use_vision:
+                screenshot_b64 = await self.take_screenshot()
 
-        return self.current_state
+            self.current_state = BrowserState(
+                element_tree=content.element_tree,
+                selector_map=content.selector_map,
+                url=page.url,
+                html=await page.content(),
+                title=await page.title(),
+                tabs=await self.get_tabs_info(),
+                screenshot=screenshot_b64,
+            )
+
+            return self.current_state
+        except Exception as e:
+            logger.error(f"Failed to update state: {str(e)}")
+            # Return last known good state if available
+            if hasattr(self, "current_state"):
+                return self.current_state
+            raise
 
     # region - Browser Actions
 
@@ -600,30 +617,40 @@ class BrowserContext:
 
         screenshot_b64 = base64.b64encode(screenshot).decode("utf-8")
 
-        await self.remove_highlights()
+        # await self.remove_highlights()
 
         return screenshot_b64
 
     async def remove_highlights(self):
         """
         Removes all highlight overlays and labels created by the highlightElement function.
+        Handles cases where the page might be closed or inaccessible.
         """
-        page = await self.get_current_page()
-        await page.evaluate(
-            """
-			// Remove the highlight container and all its contents
-			const container = document.getElementById('playwright-highlight-container');
-			if (container) {
-				container.remove();
-			}
+        try:
+            page = await self.get_current_page()
+            await page.evaluate(
+                """
+                try {
+                    // Remove the highlight container and all its contents
+                    const container = document.getElementById('playwright-highlight-container');
+                    if (container) {
+                        container.remove();
+                    }
 
-			// Remove highlight attributes from elements
-			const highlightedElements = document.querySelectorAll('[browser-user-highlight-id^="playwright-highlight-"]');
-			highlightedElements.forEach(el => {
-				el.removeAttribute('browser-user-highlight-id');
-			});
-			"""
-        )
+                    // Remove highlight attributes from elements
+                    const highlightedElements = document.querySelectorAll('[browser-user-highlight-id^="playwright-highlight-"]');
+                    highlightedElements.forEach(el => {
+                        el.removeAttribute('browser-user-highlight-id');
+                    });
+                } catch (e) {
+                    console.error('Failed to remove highlights:', e);
+                }
+                """
+            )
+        except Exception as e:
+            logger.debug(f"Failed to remove highlights (this is usually ok): {str(e)}")
+            # Don't raise the error since this is not critical functionality
+            pass
 
     # endregion
 
@@ -677,7 +704,7 @@ class BrowserContext:
 
     def _enhanced_css_selector_for_element(self, element: DOMElementNode) -> str:
         """
-        Creates a CSS selector for a DOM element, prioritizing unique identifiers.
+        Creates a CSS selector for a DOM element, handling various edge cases and special characters.
 
         Args:
                 element: The DOM element to create a selector for
@@ -689,95 +716,91 @@ class BrowserContext:
             # Get base selector from XPath
             css_selector = self._convert_simple_xpath_to_css_selector(element.xpath)
 
-            # First priority - unique identifiers
-            UNIQUE_IDENTIFIERS = {
+            # Handle class attributes
+            if "class" in element.attributes and element.attributes["class"]:
+                # Define a regex pattern for valid class names in CSS
+                valid_class_name_pattern = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_-]*$")
+
+                # Iterate through the class attribute values
+                classes = element.attributes["class"].split()
+                for class_name in classes:
+                    # Skip empty class names
+                    if not class_name.strip():
+                        continue
+
+                    # Check if the class name is valid
+                    if valid_class_name_pattern.match(class_name):
+                        # Append the valid class name to the CSS selector
+                        css_selector += f".{class_name}"
+                    else:
+                        # Skip invalid class names
+                        continue
+
+            # Expanded set of safe attributes that are stable and useful for selection
+            SAFE_ATTRIBUTES = {
+                # Standard HTML attributes
                 "id",
+                "name",
+                "type",
+                "value",
+                "placeholder",
+                # Accessibility attributes
+                "aria-label",
+                "aria-labelledby",
+                "aria-describedby",
+                "role",
+                # Common form attributes
+                "for",
+                "autocomplete",
+                "required",
+                "readonly",
+                # Media attributes
+                "alt",
+                "title",
+                "src",
+                # Data attributes (if they're stable in your application)
                 "data-testid",
                 "data-id",
                 "data-qa",
                 "data-cy",
-                "data-test",
-            }
-
-            # Second priority - attributes that often contain unique values
-            SEMI_UNIQUE_ATTRIBUTES = {
+                # Custom stable attributes (add any application-specific ones)
                 "href",
-                "src",
-                "value",
-                "name",
-                "for",
-                "aria-controls",
-                "action",
-                "data-url",
-                "data-href",
+                "target",
             }
 
-            # Third priority - descriptive attributes
-            DESCRIPTIVE_ATTRIBUTES = {
-                "type",
-                "role",
-                "aria-label",
-                "title",
-                "placeholder",
-                "alt",
-                "aria-expanded",
-                "aria-haspopup",
-                "aria-selected",
-                "aria-current",
-                "aria-pressed",
-                "autocomplete",
-            }
+            # Handle other attributes
+            for attribute, value in element.attributes.items():
+                if attribute == "class":
+                    continue
 
-            # Handle class attributes first (keeping original logic)
-            if "class" in element.attributes and element.attributes["class"]:
-                classes = element.attributes["class"].split()
-                for class_name in classes:
-                    if not class_name:
-                        continue
-                    # Escape special characters in class names
-                    if any(char in class_name for char in ":()[],>+~|.# "):
-                        # Use attribute contains for special characters
-                        css_selector += f'[class*="{class_name}"]'
-                    else:
-                        css_selector += f".{class_name}"
+                # Skip invalid attribute names
+                if not attribute.strip():
+                    continue
 
-            # Check for unique identifiers
-            for attr in UNIQUE_IDENTIFIERS:
-                if attr in element.attributes and element.attributes[attr]:
-                    value = element.attributes[attr].strip()
-                    if value:
-                        value = value.replace('"', '\\"')
-                        return f'{css_selector}[{attr}="{value}"]'
+                if attribute not in SAFE_ATTRIBUTES:
+                    continue
 
-            # Then check semi-unique attributes
-            for attr in SEMI_UNIQUE_ATTRIBUTES:
-                if attr in element.attributes and element.attributes[attr]:
-                    value = element.attributes[attr].strip()
-                    if value and len(value) < 100:  # Avoid extremely long values
-                        value = value.replace('"', '\\"')
-                        css_selector += f'[{attr}="{value}"]'
-                        return css_selector  # Return early as these are usually unique enough
+                # Escape special characters in attribute names
+                safe_attribute = attribute.replace(":", r"\:")
 
-            # Finally, add descriptive attributes if selector isn't unique enough
-            attr_count = 0
-            for attr in DESCRIPTIVE_ATTRIBUTES:
-                if attr_count >= 2:  # Limit to 2 descriptive attributes
-                    break
-                if attr in element.attributes and element.attributes[attr]:
-                    value = element.attributes[attr].strip()
-                    if value and len(value) < 50:  # Skip very long values
-                        value = value.replace('"', '\\"')
-                        css_selector += f'[{attr}="{value}"]'
-                        attr_count += 1
+                # Handle different value cases
+                if value == "":
+                    css_selector += f"[{safe_attribute}]"
+                elif any(char in value for char in "\"'<>`"):
+                    # Use contains for values with special characters
+                    safe_value = value.replace('"', '\\"')
+                    css_selector += f'[{safe_attribute}*="{safe_value}"]'
+                else:
+                    css_selector += f'[{safe_attribute}="{value}"]'
 
             return css_selector
 
         except Exception:
-            # Fallback to a simple but unique selector
+            # Fallback to a more basic selector if something goes wrong
             tag_name = element.tag_name or "*"
             return f"{tag_name}[highlight_index='{element.highlight_index}']"
 
-    async def get_locate_element(self, element: DOMElementNode):
+    async def get_locate_element(self, element: DOMElementNode) -> ElementHandle | None:
         current_frame = await self.get_current_page()
 
         # Start with the target element and collect all parents
@@ -790,7 +813,7 @@ class BrowserContext:
             if parent.tag_name == "iframe":
                 break
 
-        # there can be only one iframe parent (by design of the loop above)
+        # There can be only one iframe parent (by design of the loop above)
         iframe_parent = [item for item in parents if item.tag_name == "iframe"]
         if iframe_parent:
             parent = iframe_parent[0]
@@ -799,12 +822,18 @@ class BrowserContext:
 
         css_selector = self._enhanced_css_selector_for_element(element)
 
-        if isinstance(current_frame, FrameLocator):
-            return await current_frame.locator(css_selector).element_handle()
-        else:
-            return await current_frame.wait_for_selector(
-                css_selector, timeout=5000, state="visible"
-            )
+        try:
+            if isinstance(current_frame, FrameLocator):
+                return await current_frame.locator(css_selector).element_handle()
+            else:
+                # Try to scroll into view if hidden
+                element_handle = await current_frame.query_selector(css_selector)
+                if element_handle:
+                    await element_handle.scroll_into_view_if_needed()
+                    return element_handle
+        except Exception as e:
+            logger.error(f"Failed to locate element: {str(e)}")
+            return None
 
     async def _input_text_element_node(self, element_node: DOMElementNode, text: str):
         try:
@@ -839,7 +868,7 @@ class BrowserContext:
             # await element.scroll_into_view_if_needed()
 
             try:
-                await element.click(timeout=2500)
+                await element.click(timeout=1500)
                 await page.wait_for_load_state()
             except Exception:
                 try:
@@ -906,12 +935,16 @@ class BrowserContext:
         selector_map = await self.get_selector_map()
         return await self.get_locate_element(selector_map[index])
 
+    async def get_dom_element_by_index(self, index: int) -> DOMElementNode | None:
+        selector_map = await self.get_selector_map()
+        return selector_map[index]
+
     async def save_cookies(self):
         """Save current cookies to file"""
         if self.session and self.session.context and self.config.cookies_file:
             try:
                 cookies = await self.session.context.cookies()
-                logger.debug(
+                logger.info(
                     f"Saving {len(cookies)} cookies to {self.config.cookies_file}"
                 )
 
@@ -924,3 +957,35 @@ class BrowserContext:
                     json.dump(cookies, f)
             except Exception as e:
                 logger.warning(f"Failed to save cookies: {str(e)}")
+
+    async def is_file_uploader(
+        self, element_node: DOMElementNode, max_depth: int = 3, current_depth: int = 0
+    ) -> bool:
+        """Check if element or its children are file uploaders"""
+        if current_depth > max_depth:
+            return False
+
+        # Check current element
+        is_uploader = False
+
+        if not isinstance(element_node, DOMElementNode):
+            return False
+
+        # Check for file input attributes
+        if element_node.tag_name == "input":
+            is_uploader = (
+                element_node.attributes.get("type") == "file"
+                or element_node.attributes.get("accept") is not None
+            )
+
+        if is_uploader:
+            return True
+
+        # Recursively check children
+        if element_node.children and current_depth < max_depth:
+            for child in element_node.children:
+                if isinstance(child, DOMElementNode):
+                    if await self.is_file_uploader(child, max_depth, current_depth + 1):
+                        return True
+
+        return False
