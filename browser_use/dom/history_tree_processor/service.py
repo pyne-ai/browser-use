@@ -29,6 +29,7 @@ class HistoryTreeProcessor:
             dom_element.attributes,
             dom_element.shadow_root,
             dom_element.get_all_text_till_next_clickable_element(),
+            dom_element.pyne_selector,
         )
 
     @staticmethod

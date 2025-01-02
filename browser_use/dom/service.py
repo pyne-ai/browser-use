@@ -76,6 +76,7 @@ class DomService:
 		element_node = DOMElementNode(
 			tag_name=tag_name,
 			xpath=node_data['xpath'],
+			pyne_selector=node_data['pyneSelector'],
 			attributes=node_data.get('attributes', {}),
 			children=[],  # Initialize empty, will fill later
 			is_visible=node_data.get('isVisible', False),

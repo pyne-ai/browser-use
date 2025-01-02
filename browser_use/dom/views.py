@@ -39,6 +39,7 @@ class DOMElementNode(DOMBaseNode):
 
 	tag_name: str
 	xpath: str
+	pyne_selector: str
 	attributes: Dict[str, str]
 	children: List[DOMBaseNode]
 	is_interactive: bool = False

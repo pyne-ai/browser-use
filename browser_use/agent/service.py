@@ -51,10 +51,6 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 
-def hello():
-    print("bjk  ")
-
-
 class Agent:
     def __init__(
         self,
@@ -238,7 +234,7 @@ class Agent:
         """Create and store history item"""
         interacted_element = None
         len_result = len(result)
-
+        print("MAKING HISTORY")
         if model_output:
             interacted_elements = AgentHistory.get_interacted_element(
                 model_output, state.selector_map

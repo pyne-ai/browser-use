@@ -22,6 +22,7 @@ class DOMHistoryElement:
     attributes: dict[str, str]
     shadow_root: bool = False
     text: str = ""
+    pyne_selector: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -32,4 +33,5 @@ class DOMHistoryElement:
             "attributes": self.attributes,
             "shadow_root": self.shadow_root,
             "text": self.text,
+            "pyne_selector": self.pyne_selector,
         }

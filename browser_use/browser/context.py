@@ -183,6 +183,7 @@ class BrowserContext:
                 is_visible=True,
                 parent=None,
                 xpath="",
+                pyne_selector="",
                 attributes={},
                 children=[],
             ),

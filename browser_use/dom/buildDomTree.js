@@ -353,6 +353,7 @@
             attributes: {},
             xpath: node.nodeType === Node.ELEMENT_NODE ? getXPathTree(node, true) : null,
             children: [],
+            pyneSelector: "",
         };
 
         // Copy all attributes if the node is an element
@@ -378,6 +379,7 @@
                 nodeData.highlightIndex = highlightIndex++;
                 if (doHighlightElements) {
                     highlightElement(node, nodeData.highlightIndex, parentIframe);
+                    nodeData.pyneSelector = generateSelector(node);
                 }
             }
         }
@@ -422,6 +424,342 @@
 
         return nodeData;
     }
+
+    function generateSelector(element) {
+        function getUniqueXpath(element) {
+          const idPath = getById(element);
+          if (idPath.length > 0) {
+            return idPath;
+          }
+      
+          const attrPath = getByAttribute(element);
+          if (attrPath.length > 0) {
+            return attrPath;
+          }
+      
+          const textPath = getByText(element);
+          if (textPath.length > 0) {
+            return textPath;
+          }
+      
+          const clsxPath = getByUniqueClass(element);
+          if (clsxPath.length > 0) {
+            return clsxPath;
+          }
+      
+          const comboPath = getByClassCombo(element);
+          if (comboPath.length > 0) {
+            return comboPath;
+          }
+      
+          return '';
+        }
+      
+        function getById(element) {
+          if (!element.id) return '';
+      
+          const xpath = `//*[@id="${element.id}"]`;
+          if (isValidXPath(xpath) && isUnique(xpath, element)) {
+            return xpath;
+          }
+      
+          return '';
+        }
+      
+        function getByAttribute(element) {
+          const attributes = element.attributes || [];
+          for (let i = 0; i < attributes.length; i++) {
+            const { name, value } = attributes[i];
+      
+            console.log({ name, value });
+      
+            if (
+              value.length === 0 ||
+              (!name.startsWith('data-') &&
+                !name.startsWith('aria-') &&
+                name !== 'alt' &&
+                name !== 'placeholder' &&
+                name !== 'name')
+            )
+              continue;
+      
+            const xpath = x(`[@${name}="${value}"]`, element);
+            if (xpath.length > 0) {
+              return xpath;
+            }
+          }
+      
+          return '';
+        }
+      
+        function getByUniqueClass(element) {
+          if (!element.className) return '';
+      
+          const classList = Array.from(element.classList).filter(isValidClassName);
+      
+          for (let i = 0; i < classList.length; i++) {
+            const xpath = x(`[contains(@class, "${classList[i]}")]`, element);
+            if (xpath.length > 0) {
+              return xpath;
+            }
+          }
+      
+          return '';
+        }
+      
+        function getByText(element) {
+          if (!element.textContent) return '';
+      
+          const allowedTags = ['a', 'button', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'li', 'label'];
+          const tagName = getTagName(element);
+          if(!tagName) {
+            return '';
+          }
+          
+          if (allowedTags.includes(tagName)) {
+            const textContent = element?.textContent
+              ?.split('\n')
+              .sort((a, b) => b.length - a.length)[0]
+              .trim()
+              .replace(/"/g, '\'');
+      
+            if (textContent && textContent.length > 0) {
+              const pathIndex = getElementIndexInParent(element);
+              const xpathOptions = [
+                `//*[contains(text(),"${textContent}")]`,
+                `//*[text()="${textContent}"]`,
+                `//*[contains(.,"${textContent}")]`,
+                `//${tagName}[contains(text(),"${textContent}")]`,
+                `//${tagName}[text()="${textContent}"]`,
+                `//${tagName}[contains(.,"${textContent}")]`,
+                `//${tagName}${pathIndex}[contains(text(),"${textContent}")]`,
+                `//${tagName}${pathIndex}[text()="${textContent}"]`,
+                `//${tagName}${pathIndex}[contains(.,"${textContent}")]`,
+              ];
+      
+              const xpath = xpathOptions.find(xpath => isValidXPath(xpath) && isUnique(xpath, element));
+              return xpath || '';
+            }
+          }
+      
+          return '';
+        }
+      
+        function getByClassCombo(element) {
+          if (!element.className) return '';
+      
+          const classList = Array.from(element.classList).filter(isValidClassName);
+          const combinations = getClassCombinations(classList);
+          // console.log({ combinations });
+          for (const combo of combinations) {
+            if (combo.length === 1) continue;
+            // const selector = combo.map(c => '.' + c).join('');
+            const attr = combo.map(c => `contains(@class,"${c}")`).join(' and ');
+            const xpath = x(`[${attr}]`, element);
+            if (xpath.length > 0) {
+              return xpath;
+            }
+          }
+      
+          return '';
+        }
+      
+        function getClassCombinations(classes) {
+          const combinations = [];
+          const n = classes.length;
+          for (let i = 0; i < n; i++) {
+            combinations.push([classes[i]]);
+            for (let j = i + 1; j < n; j++) {
+              combinations.push([classes[i], classes[j]]);
+              for (let k = j + 1; k < n; k++) {
+                combinations.push([classes[i], classes[j], classes[k]]);
+              }
+            }
+          }
+          return combinations;
+        }
+      
+        function x(attr, element) {
+          const tagName = getTagName(element);
+          if(!tagName) {
+            return '';
+          }
+
+          const pathIndex = getElementIndexInParent(element);
+      
+          let xpath = '//' + tagName + attr;
+          if (isValidXPath(xpath) && isUnique(xpath, element)) {   
+            return xpath;
+          }
+      
+          xpath = '//' + tagName + pathIndex + attr;
+          if (isValidXPath(xpath) && isUnique(xpath, element)) {
+            return xpath;
+          }
+      
+          return '';
+        }
+      
+        function getTagName(element) {
+          return element.tagName?.toLowerCase();
+        }
+      
+        function getElementIndexInParent(el) {
+          const siblings = Array.from(el.parentNode?.children || []).filter(e => e.tagName === el.tagName);
+          if (siblings.length > 1) {
+            // Return 1-based index if there are siblings with the same tag
+            return `[${siblings.indexOf(el) + 1}]`;
+          }
+          return ''; // No need for index if it's unique within its parent
+        }
+      
+        function isValidClassName(className) {
+          // Reject class names that are too short
+          if (className.length <= 2) return false;
+          // Reject class names that contain digits
+          if (/\d/.test(className)) return false;
+          // Reject class names that start with known prefixes
+          const rejectedPrefixes = ['css', 'jsx', 'tw', 'tailwind', 'Styled', 'style'];
+          for (const prefix of rejectedPrefixes) {
+            if (className.startsWith(prefix)) return false;
+          }
+          // Reject common utility class names
+          const rejectedClassNames = [
+            'my',
+            'mx',
+            'mt',
+            'mb',
+            'ml',
+            'mr',
+            'p',
+            'py',
+            'px',
+            'pt',
+            'pb',
+            'pl',
+            'pr',
+            'flex',
+            'grid',
+            'inline',
+            'block',
+            'hidden',
+            'relative',
+            'absolute',
+            'fixed',
+            'static',
+            'sticky',
+            'top',
+            'bottom',
+            'left',
+            'right',
+            'font',
+            'leading',
+            'tracking',
+            'uppercase',
+            'lowercase',
+            'capitalize',
+            'antialiased',
+            'break',
+            'whitespace',
+            'truncate',
+            'cursor',
+            'pointer',
+            'hover',
+            'focus',
+            'active',
+            'visited',
+            'disabled',
+            'first',
+            'last',
+            'even',
+            'odd',
+            'col',
+            'row',
+            'gap',
+            'space',
+            'divide',
+            'border',
+            'rounded',
+            'shadow',
+            'opacity',
+            'transition',
+            'duration',
+            'ease',
+            'delay',
+            'animate',
+            'fill',
+            'stroke',
+            'transform',
+            'scale',
+            'rotate',
+            'translate',
+            'skew',
+            'origin',
+            'resize',
+            'appearance',
+            'outline',
+            'table',
+            'select',
+            'svg',
+            'filter',
+            'blend',
+            'isolation',
+            'mix',
+            'order',
+            'placeholder',
+            'ring',
+            'float',
+            'clear',
+            'object',
+            'overflow',
+            'position',
+            'z',
+            'display',
+            'text',
+            'bg',
+            'w',
+            'h',
+            'min',
+            'max',
+            'inset',
+            'm',
+            'p',
+            'bg',
+            'text',
+            'border',
+            'grow',
+            'shrink',
+            'justify',
+            'items',
+            'align',
+          ];
+          if (rejectedClassNames.some(cn => cn === className || className.startsWith(cn + '-'))) return false;
+      
+          return true;
+        }
+      
+        function isUnique(xpath, element) {
+          if (
+            document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue === element
+          ) {
+            return true;
+          }
+      
+          return false;
+        }
+
+        function isValidXPath(xpath) {
+          try {
+            document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+            return true;
+          } catch (e) {
+            return false;
+          }
+        }
+      
+        return getUniqueXpath(element);
+      }
+      
 
 
     return buildDomTree(document.body);
